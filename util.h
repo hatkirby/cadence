@@ -1,6 +1,12 @@
 #ifndef UTIL_H_CED7A66D
 #define UTIL_H_CED7A66D
 
+#include <algorithm>
+#include <string>
+#include <iterator>
+#include <cctype>
+#include <sstream>
+
 namespace cadence {
   
   inline std::string uppercase(std::string in)
