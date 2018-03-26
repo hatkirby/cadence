@@ -5,7 +5,7 @@
 
 namespace cadence {
   namespace generator {
-    
+
     class mood {
     public:
       enum class type {
@@ -19,41 +19,41 @@ namespace cadence {
         sad,
         instrumental
       };
-      
+
       // Constructor
-      
+
       mood(type t, double prob);
-      
+
       // Accessors
-      
+
       type getType() const
       {
         return type_;
       }
-      
+
       double getProbability() const
       {
         return probability_;
       }
-      
+
       bool getPositive() const
       {
         return positive_;
       }
-      
+
       std::string getCategory() const
       {
         return category_;
       }
-      
+
     private:
       type type_;
       double probability_;
       bool positive_;
       std::string category_;
-      
+
     };
-    
+
   };
 };
 

@@ -16,7 +16,7 @@ int main(int argc, char** argv)
     try
     {
       cadence::generator::generator app(argv[1], argv[2]);
-      
+
       try
       {
         app.run();
