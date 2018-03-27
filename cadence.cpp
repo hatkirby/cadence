@@ -10,7 +10,8 @@
 #include <thread>
 #include <random>
 #include <list>
-#include "util.h"
+#include <hkutil/string.h>
+#include <hkutil/database.h>
 
 const std::vector<std::string> moods = {"party", "chill", "crazy", "happy", "sad", "instrumental", "vocal"};
 
@@ -72,19 +73,9 @@ int main(int argc, char** argv)
   std::mt19937 random_engine{random_device()};
 
   // Connect to the AcousticBrainz data file.
-  sqlite3* ppdb = nullptr;
-
-  if (sqlite3_open_v2(config["acoustic_datafile"].as<std::string>().c_str(), &ppdb, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK)
-  {
-    // We still have to free the resources allocated. In the event that
-    // allocation failed, ppdb will be null and sqlite3_close_v2 will just
-    // ignore it.
-    sqlite3_close_v2(ppdb);
-
-    std::cout << "Could not open acoustic datafile." << std::endl;
-
-    return 1;
-  }
+  hatkirby::database abdb(
+    config["acoustic_datafile"].as<std::string>(),
+    hatkirby::dbmode::read);
 
   for (;;)
   {
@@ -92,36 +83,15 @@ int main(int argc, char** argv)
 
     std::string mood = moods[std::uniform_int_distribution<int>(0, moods.size()-1)(random_engine)];
 
-    std::string songTitle;
-    std::string songArtist;
+    hatkirby::row song =
+      abdb.queryFirst(
+        "SELECT title, artist FROM songs WHERE category = ? ORDER BY RANDOM() LIMIT 1",
+        { mood });
 
-    sqlite3_stmt* ppstmt;
-    std::string query = "SELECT title, artist FROM songs WHERE category = ? ORDER BY RANDOM() LIMIT 1";
+    std::string songTitle = mpark::get<std::string>(song[0]);
+    std::string songArtist = mpark::get<std::string>(song[1]);
 
-    if (sqlite3_prepare_v2(ppdb, query.c_str(), query.length(), &ppstmt, NULL) != SQLITE_OK)
-    {
-      std::cout << "Error reading from acoustic datafile:" << std::endl;
-      std::cout << sqlite3_errmsg(ppdb) << std::endl;
-
-      return 1;
-    }
-
-    sqlite3_bind_text(ppstmt, 1, mood.c_str(), mood.length(), SQLITE_TRANSIENT);
-
-    if (sqlite3_step(ppstmt) == SQLITE_ROW)
-    {
-      songTitle = reinterpret_cast<const char*>(sqlite3_column_blob(ppstmt, 0));
-      songArtist = reinterpret_cast<const char*>(sqlite3_column_blob(ppstmt, 1));
-    } else {
-      std::cout << "Error reading from acoustic datafile:" << std::endl;
-      std::cout << sqlite3_errmsg(ppdb) << std::endl;
-
-      return 1;
-    }
-
-    sqlite3_finalize(ppstmt);
-
-    std::string action = "{" + cadence::uppercase(mood) + "}";
+    std::string action = "{" + hatkirby::uppercase(mood) + "}";
     int tknloc;
     while ((tknloc = action.find("{")) != std::string::npos)
     {
@@ -182,13 +152,13 @@ int main(int argc, char** argv)
         });
       } else if (isupper(token[0]) && !isupper(token[1]))
       {
-        auto words = cadence::split<std::list<std::string>>(result, " ");
+        auto words = hatkirby::split<std::list<std::string>>(result, " ");
         for (auto& word : words)
         {
           word[0] = std::toupper(word[0]);
         }
 
-        finalresult = cadence::implode(std::begin(words), std::end(words), " ");
+        finalresult = hatkirby::implode(std::begin(words), std::end(words), " ");
       } else {
         finalresult = result;
       }

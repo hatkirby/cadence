@@ -4,9 +4,8 @@
 #include <fstream>
 #include <dirent.h>
 #include <json.hpp>
-#include "progress.h"
-#include "field.h"
-#include "../util.h"
+#include <hkutil/progress.h>
+#include <hkutil/string.h>
 #include "mood.h"
 
 namespace cadence {
@@ -16,7 +15,7 @@ namespace cadence {
       std::string inputpath,
       std::string outputpath) :
         inputpath_(inputpath),
-        db_(outputpath)
+        db_(outputpath, hatkirby::dbmode::create)
     {
       // Add directory separator to input path
       if ((inputpath_.back() != '/') && (inputpath_.back() != '\\'))
@@ -61,13 +60,13 @@ namespace cadence {
       }
 
       std::string schema = schemaBuilder.str();
-      auto queries = split<std::list<std::string>>(schema, ";");
-      progress ppgs("Writing database schema...", queries.size());
+      auto queries = hatkirby::split<std::list<std::string>>(schema, ";");
+      hatkirby::progress ppgs("Writing database schema...", queries.size());
       for (std::string query : queries)
       {
         if (!queries.empty())
         {
-          db_.runQuery(query);
+          db_.execute(query);
         }
 
         ppgs.update();
@@ -134,7 +133,9 @@ namespace cadence {
 
     void generator::parseData()
     {
-      progress ppgs("Parsing AcousticBrainz data files...", datafiles_.size());
+      hatkirby::progress ppgs(
+        "Parsing AcousticBrainz data files...",
+        datafiles_.size());
 
       for (std::string datafile : datafiles_)
       {
@@ -163,12 +164,12 @@ namespace cadence {
             return left.getProbability() > right.getProbability();
           });
 
-          std::list<field> fields;
-          fields.emplace_back("title", jsonData["metadata"]["tags"]["title"][0].get<std::string>());
-          fields.emplace_back("artist", jsonData["metadata"]["tags"]["artist"][0].get<std::string>());
-          fields.emplace_back("category", moods.front().getCategory());
+          std::list<hatkirby::column> columns;
+          columns.emplace_back("title", jsonData["metadata"]["tags"]["title"][0].get<std::string>());
+          columns.emplace_back("artist", jsonData["metadata"]["tags"]["artist"][0].get<std::string>());
+          columns.emplace_back("category", moods.front().getCategory());
 
-          db_.insertIntoTable("songs", std::move(fields));
+          db_.insertIntoTable("songs", std::move(columns));
         } catch (const std::domain_error& ex)
         {
           // Weird data. Ignore silently.

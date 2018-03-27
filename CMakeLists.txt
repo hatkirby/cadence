@@ -10,7 +10,8 @@ add_subdirectory(vendor/libtwittercpp)
 include_directories(
   ${sqlite3_INCLUDE_DIR}
   vendor/libtwittercpp/src
-  ${yaml-cpp_INCLUDE_DIRS})
+  ${yaml-cpp_INCLUDE_DIRS}
+  vendor/hkutil)
 
 add_executable(cadence cadence.cpp)
 set_property(TARGET cadence PROPERTY CXX_STANDARD 11)

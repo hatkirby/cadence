@@ -3,7 +3,7 @@
 
 #include <string>
 #include <list>
-#include "database.h"
+#include <hkutil/database.h>
 
 namespace cadence {
   namespace generator {
@@ -37,7 +37,7 @@ namespace cadence {
 
       // Output
 
-      database db_;
+      hatkirby::database db_;
 
       // Cache
 
