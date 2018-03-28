@@ -13,7 +13,7 @@ include_directories(
   ${yaml-cpp_INCLUDE_DIRS}
   vendor/hkutil)
 
-add_executable(cadence cadence.cpp)
+add_executable(cadence cadence.cpp main.cpp)
 set_property(TARGET cadence PROPERTY CXX_STANDARD 11)
 set_property(TARGET cadence PROPERTY CXX_STANDARD_REQUIRED ON)
 target_link_libraries(cadence ${sqlite3_LIBRARIES} twitter++ ${yaml-cpp_LIBRARIES})

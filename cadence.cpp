@@ -1,45 +1,26 @@
+#include "cadence.h"
 #include <stdexcept>
-#include <vector>
-#include <string>
 #include <yaml-cpp/yaml.h>
-#include <sqlite3.h>
 #include <iostream>
 #include <fstream>
-#include <twitter.h>
 #include <chrono>
 #include <thread>
-#include <random>
 #include <list>
 #include <hkutil/string.h>
-#include <hkutil/database.h>
 
-int main(int argc, char** argv)
+cadence::cadence(
+  std::string configFile,
+  std::mt19937& rng) :
+    rng_(rng)
 {
-  if (argc != 2)
-  {
-    std::cout << "usage: cadence [configfile]" << std::endl;
-    return -1;
-  }
-
-  std::string configfile(argv[1]);
-  YAML::Node config = YAML::LoadFile(configfile);
-
-  // Set up the Twitter client.
-  twitter::auth auth;
-  auth.setConsumerKey(config["consumer_key"].as<std::string>());
-  auth.setConsumerSecret(config["consumer_secret"].as<std::string>());
-  auth.setAccessKey(config["access_key"].as<std::string>());
-  auth.setAccessSecret(config["access_secret"].as<std::string>());
-
-  twitter::client client(auth);
+  // Load the config file.
+  YAML::Node config = YAML::LoadFile(configFile);
 
   // Read in the forms file.
-  std::map<std::string, std::vector<std::string>> groups;
   std::ifstream datafile(config["forms"].as<std::string>());
   if (!datafile.is_open())
   {
-    std::cout << "Could not find forms file." << std::endl;
-    return 1;
+    throw std::invalid_argument("Could not find forms file");
   }
 
   bool newgroup = true;
@@ -61,30 +42,40 @@ int main(int argc, char** argv)
       {
         newgroup = true;
       } else {
-        groups[curgroup].push_back(line);
+        groups_[curgroup].push_back(line);
       }
     }
   }
 
-  // Initialize the random number generator.
-  std::random_device random_device;
-  std::mt19937 random_engine{random_device()};
-
   // Connect to the AcousticBrainz data file.
-  hatkirby::database abdb(
-    config["acoustic_datafile"].as<std::string>(),
-    hatkirby::dbmode::read);
+  database_ =
+    std::unique_ptr<hatkirby::database>(
+      new hatkirby::database(
+        config["acoustic_datafile"].as<std::string>(),
+        hatkirby::dbmode::read));
 
+  // Set up the Twitter client.
+  twitter::auth auth;
+  auth.setConsumerKey(config["consumer_key"].as<std::string>());
+  auth.setConsumerSecret(config["consumer_secret"].as<std::string>());
+  auth.setAccessKey(config["access_key"].as<std::string>());
+  auth.setAccessSecret(config["access_secret"].as<std::string>());
+
+  client_ = std::unique_ptr<twitter::client>(new twitter::client(auth));
+}
+
+void cadence::run() const
+{
   for (;;)
   {
     std::cout << "Generating tweet..." << std::endl;
 
     hatkirby::row songRow =
-      abdb.queryFirst(
+      database_->queryFirst(
         "SELECT song_id, title, artist FROM songs ORDER BY RANDOM() LIMIT 1");
 
     hatkirby::row moodRow =
-      abdb.queryFirst(
+      database_->queryFirst(
         "SELECT mood FROM moods WHERE song_id = ? ORDER BY RANDOM() LIMIT 1",
         { mpark::get<int>(songRow[0]) });
 
@@ -118,11 +109,11 @@ int main(int argc, char** argv)
       } else if (canontkn == "SONG")
       {
         result = "\"" + songTitle + "\"";
-      } else if (groups.count(canontkn)) {
-        auto& group = groups.at(canontkn);
+      } else if (groups_.count(canontkn)) {
+        auto& group = groups_.at(canontkn);
         std::uniform_int_distribution<int> dist(0, group.size() - 1);
 
-        result = group[dist(random_engine)];
+        result = group[dist(rng_)];
       } else {
         throw std::logic_error("No such form as " + canontkn);
       }
@@ -175,7 +166,7 @@ int main(int argc, char** argv)
     {
       try
       {
-        client.updateStatus(action);
+        client_->updateStatus(action);
 
         std::cout << action << std::endl;
       } catch (const twitter::twitter_error& e)
