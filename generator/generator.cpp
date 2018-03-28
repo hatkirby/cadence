@@ -6,7 +6,6 @@
 #include <json.hpp>
 #include <hkutil/progress.h>
 #include <hkutil/string.h>
-#include "mood.h"
 
 namespace cadence {
   namespace generator {
@@ -93,7 +92,8 @@ namespace cadence {
           DIR* subdir;
           if ((subdir = opendir(directory.c_str())) == nullptr)
           {
-            throw std::invalid_argument("Invalid AcousticBrainz data directory");
+            throw std::invalid_argument(
+              "Invalid AcousticBrainz data directory");
           }
 
           struct dirent* subent;
@@ -106,7 +106,8 @@ namespace cadence {
               DIR* subsubdir;
               if ((subsubdir = opendir(subdirectory.c_str())) == nullptr)
               {
-                throw std::invalid_argument("Invalid AcousticBrainz data directory");
+                throw std::invalid_argument(
+                  "Invalid AcousticBrainz data directory");
               }
 
               struct dirent* subsubent;
@@ -149,27 +150,87 @@ namespace cadence {
 
         try
         {
-          std::vector<mood> moods;
-          moods.emplace_back(mood::type::danceable, jsonData["highlevel"]["danceability"]["all"]["danceable"]);
-          moods.emplace_back(mood::type::acoustic, jsonData["highlevel"]["mood_acoustic"]["all"]["acoustic"]);
-          moods.emplace_back(mood::type::aggressive, jsonData["highlevel"]["mood_aggressive"]["all"]["aggressive"]);
-          moods.emplace_back(mood::type::electronic, jsonData["highlevel"]["mood_electronic"]["all"]["electronic"]);
-          moods.emplace_back(mood::type::happy, jsonData["highlevel"]["mood_happy"]["all"]["happy"]);
-          moods.emplace_back(mood::type::party, jsonData["highlevel"]["mood_party"]["all"]["party"]);
-          moods.emplace_back(mood::type::relaxed, jsonData["highlevel"]["mood_relaxed"]["all"]["relaxed"]);
-          moods.emplace_back(mood::type::sad, jsonData["highlevel"]["mood_sad"]["all"]["sad"]);
-          moods.emplace_back(mood::type::instrumental, jsonData["highlevel"]["voice_instrumental"]["all"]["instrumental"]);
+          auto& hl = jsonData["highlevel"];
 
-          std::sort(std::begin(moods), std::end(moods), [] (const mood& left, const mood& right) -> bool {
-            return left.getProbability() > right.getProbability();
-          });
+          double danceable = hl["danceability"]["all"]["danceable"];
+          double acoustic = hl["mood_acoustic"]["all"]["acoustic"];
+          double aggressive = hl["mood_aggressive"]["all"]["aggressive"];
+          double electronic = hl["mood_electronic"]["all"]["electronic"];
+          double happy = hl["mood_happy"]["all"]["happy"];
+          double party = hl["mood_party"]["all"]["party"];
+          double relaxed = hl["mood_relaxed"]["all"]["relaxed"];
+          double sad = hl["mood_sad"]["all"]["sad"];
+          double instrumental = hl["voice_instrumental"]["all"]["instrumental"];
 
-          std::list<hatkirby::column> columns;
-          columns.emplace_back("title", jsonData["metadata"]["tags"]["title"][0].get<std::string>());
-          columns.emplace_back("artist", jsonData["metadata"]["tags"]["artist"][0].get<std::string>());
-          columns.emplace_back("category", moods.front().getCategory());
+          std::string title = jsonData["metadata"]["tags"]["title"][0];
+          std::string artist = jsonData["metadata"]["tags"]["artist"][0];
 
-          db_.insertIntoTable("songs", std::move(columns));
+          uint64_t songId = db_.insertIntoTable(
+            "songs",
+            {
+              { "title", title },
+              { "artist", artist }
+            });
+
+          std::list<std::string> moods;
+
+          // ~38%
+          if ((party > 0.5) || (danceable > 0.75))
+          {
+            moods.push_back("party");
+          }
+
+          // ~38%
+          if ((relaxed > 0.81) || (acoustic > 0.5))
+          {
+            moods.push_back("chill");
+          }
+
+          // ~42%
+          if ((aggressive > 0.5) || (electronic > 0.95))
+          {
+            moods.push_back("crazy");
+          }
+
+          // ~30%
+          if (happy > 0.5)
+          {
+            moods.push_back("happy");
+          }
+
+          // ~30%
+          if (sad > 0.5)
+          {
+            moods.push_back("sad");
+          }
+
+          // ~38%
+          if (instrumental > 0.9)
+          {
+            moods.push_back("instrumental");
+          }
+
+          // ~34%
+          if (instrumental < 0.2)
+          {
+            moods.push_back("vocal");
+          }
+
+          // ~1%
+          if (moods.empty())
+          {
+            moods.push_back("unknown");
+          }
+
+          for (const std::string& mood : moods)
+          {
+            db_.insertIntoTable(
+              "moods",
+              {
+                { "song_id", static_cast<int>(songId) },
+                { "mood", mood }
+              });
+          }
         } catch (const std::domain_error& ex)
         {
           // Weird data. Ignore silently.

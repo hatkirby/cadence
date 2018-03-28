@@ -13,8 +13,6 @@
 #include <hkutil/string.h>
 #include <hkutil/database.h>
 
-const std::vector<std::string> moods = {"party", "chill", "crazy", "happy", "sad", "instrumental", "vocal"};
-
 int main(int argc, char** argv)
 {
   if (argc != 2)
@@ -81,21 +79,25 @@ int main(int argc, char** argv)
   {
     std::cout << "Generating tweet..." << std::endl;
 
-    std::string mood = moods[std::uniform_int_distribution<int>(0, moods.size()-1)(random_engine)];
-
-    hatkirby::row song =
+    hatkirby::row songRow =
       abdb.queryFirst(
-        "SELECT title, artist FROM songs WHERE category = ? ORDER BY RANDOM() LIMIT 1",
-        { mood });
+        "SELECT song_id, title, artist FROM songs ORDER BY RANDOM() LIMIT 1");
 
-    std::string songTitle = mpark::get<std::string>(song[0]);
-    std::string songArtist = mpark::get<std::string>(song[1]);
+    hatkirby::row moodRow =
+      abdb.queryFirst(
+        "SELECT mood FROM moods WHERE song_id = ? ORDER BY RANDOM() LIMIT 1",
+        { mpark::get<int>(songRow[0]) });
+
+    std::string songTitle = mpark::get<std::string>(songRow[1]);
+    std::string songArtist = mpark::get<std::string>(songRow[2]);
+    std::string mood = mpark::get<std::string>(moodRow[0]);
 
     std::string action = "{" + hatkirby::uppercase(mood) + "}";
     int tknloc;
     while ((tknloc = action.find("{")) != std::string::npos)
     {
       std::string token = action.substr(tknloc+1, action.find("}")-tknloc-1);
+
       std::string modifier;
       int modloc;
       if ((modloc = token.find(":")) != std::string::npos)
@@ -104,10 +106,7 @@ int main(int argc, char** argv)
         token = token.substr(0, modloc);
       }
 
-      std::string canontkn;
-      std::transform(std::begin(token), std::end(token), std::back_inserter(canontkn), [] (char ch) {
-        return std::toupper(ch);
-      });
+      std::string canontkn = hatkirby::uppercase(token);
 
       std::string result;
       if (canontkn == "\\N")
@@ -125,18 +124,23 @@ int main(int argc, char** argv)
 
         result = group[dist(random_engine)];
       } else {
-        std::cout << "Badly formatted forms file:" << std::endl;
-        std::cout << "No such form as " + canontkn << std::endl;
-
-        return 1;
+        throw std::logic_error("No such form as " + canontkn);
       }
 
       if (modifier == "indefinite")
       {
-        if ((result.length() > 1) && (isupper(result[0])) && (isupper(result[1])))
+        if (
+          (result.length() > 1) &&
+          isupper(result[0]) &&
+          isupper(result[1]))
         {
           result = "an " + result;
-        } else if ((result[0] == 'a') || (result[0] == 'e') || (result[0] == 'i') || (result[0] == 'o') || (result[0] == 'u'))
+        } else if (
+          (result[0] == 'a') ||
+          (result[0] == 'e') ||
+          (result[0] == 'i') ||
+          (result[0] == 'o') ||
+          (result[0] == 'u'))
         {
           result = "an " + result;
         } else {
@@ -147,9 +151,7 @@ int main(int argc, char** argv)
       std::string finalresult;
       if (islower(token[0]))
       {
-        std::transform(std::begin(result), std::end(result), std::back_inserter(finalresult), [] (char ch) {
-          return std::tolower(ch);
-        });
+        finalresult = hatkirby::lowercase(result);
       } else if (isupper(token[0]) && !isupper(token[1]))
       {
         auto words = hatkirby::split<std::list<std::string>>(result, " ");
@@ -158,7 +160,10 @@ int main(int argc, char** argv)
           word[0] = std::toupper(word[0]);
         }
 
-        finalresult = hatkirby::implode(std::begin(words), std::end(words), " ");
+        finalresult = hatkirby::implode(
+          std::begin(words),
+          std::end(words),
+          " ");
       } else {
         finalresult = result;
       }

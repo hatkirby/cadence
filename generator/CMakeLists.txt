@@ -9,7 +9,7 @@ include_directories(
   vendor/json
   ../vendor/hkutil)
 
-add_executable(generator mood.cpp generator.cpp main.cpp)
+add_executable(generator generator.cpp main.cpp)
 set_property(TARGET generator PROPERTY CXX_STANDARD 11)
 set_property(TARGET generator PROPERTY CXX_STANDARD_REQUIRED ON)
 target_link_libraries(generator ${sqlite3_LIBRARIES})
